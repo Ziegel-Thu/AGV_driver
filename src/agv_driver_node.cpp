@@ -1,9 +1,9 @@
-#include "dji_driver/dji_driver_node.hpp"
+#include "agv_driver_node.hpp"
 #include <nav_msgs/msg/odometry.hpp>
 #include <sstream>
 #include <iomanip>
 
-namespace dji_driver
+namespace agv_driver
 {
 
 /**
@@ -15,8 +15,8 @@ namespace dji_driver
  * 3. 设置订阅发布器
  * 4. 创建定时器
  */
-DJIDriverNode::DJIDriverNode()
-: Node("dji_driver_node"), 
+AGVDriverNode::AGVDriverNode()
+: Node("agv_driver_node"), 
   last_tx_print_time_(this->now()),
   control_connected_(false)
 {
@@ -38,7 +38,7 @@ DJIDriverNode::DJIDriverNode()
     init_subscriptions();
     init_timers();
     
-    RCLCPP_INFO(this->get_logger(), "DJIDriverNode has been initialized");
+    RCLCPP_INFO(this->get_logger(), "AGVDriverNode has been initialized");
     RCLCPP_INFO(this->get_logger(), "简化模式: 仅发送xyz速度值，无协议头和校验");
 }
 
@@ -51,7 +51,7 @@ DJIDriverNode::DJIDriverNode()
  * 3. 机器人物理参数 
  * 4. 调试模式开关
  */
-void DJIDriverNode::init_parameters()
+void AGVDriverNode::init_parameters()
 {
     // 读取控制串口参数
     this->declare_parameter("control_serial.port", "/dev/ttyUSB0");
@@ -66,8 +66,8 @@ void DJIDriverNode::init_parameters()
     this->declare_parameter("velocity.angular.z.offset", 0.0);
     this->declare_parameter("velocity.angular.z.max", 1.0);
     
-    // 读取DJI底盘参数
-    this->declare_parameter("dji_chassis.speed_range", 660);
+    // 读取AGV底盘参数
+    this->declare_parameter("agv_chassis.speed_range", 660);
     
     // 读取其他参数
     this->declare_parameter("debug", false);
@@ -87,8 +87,8 @@ void DJIDriverNode::init_parameters()
     wz_offset_ = this->get_parameter("velocity.angular.z.offset").as_double();
     wz_max_ = this->get_parameter("velocity.angular.z.max").as_double();
     
-    // 获取DJI底盘参数
-    chassis_speed_range_ = this->get_parameter("dji_chassis.speed_range").as_int();
+    // 获取AGV底盘参数
+    chassis_speed_range_ = this->get_parameter("agv_chassis.speed_range").as_int();
     
     debug_mode_ = this->get_parameter("debug").as_bool();
     protocol_debug_ = this->get_parameter("protocol_debug").as_bool();
@@ -105,7 +105,7 @@ void DJIDriverNode::init_parameters()
  * 
  * @return bool 返回初始化结果，如果任一串口初始化失败则返回false
  */
-bool DJIDriverNode::init_serial()
+bool AGVDriverNode::init_serial()
 {
     bool success = true;
     
@@ -148,11 +148,11 @@ bool DJIDriverNode::init_serial()
  * 2. 创建odom话题发布器，用于发布里程计信息
  * 3. 初始化TF广播器
  */
-void DJIDriverNode::init_subscriptions()
+void AGVDriverNode::init_subscriptions()
 {
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
         "cmd_vel", 10,
-        std::bind(&DJIDriverNode::cmd_vel_callback, this, std::placeholders::_1));
+        std::bind(&AGVDriverNode::cmd_vel_callback, this, std::placeholders::_1));
     // odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     
     // 初始化TF广播器
@@ -166,17 +166,17 @@ void DJIDriverNode::init_subscriptions()
  * 1. 编码器读取定时器：10ms周期，用于从串口读取编码器数据
  * 2. 控制命令发送定时器：50ms周期，用于向串口发送控制命令
  */
-void DJIDriverNode::init_timers()
+void AGVDriverNode::init_timers()
 {
     // 创建定时器用于读取编码器数据 - 禁用编码器读取
     // encoder_read_timer_ = this->create_wall_timer(
     //     std::chrono::milliseconds(10),
-    //     std::bind(&DJIDriverNode::encoder_read_callback, this));
+    //     std::bind(&AGVDriverNode::encoder_read_callback, this));
     
     // 创建定时器用于发送控制命令
     control_write_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
-        std::bind(&DJIDriverNode::control_write_callback, this));
+        std::bind(&AGVDriverNode::control_write_callback, this));
 }
 
 /**
@@ -184,38 +184,38 @@ void DJIDriverNode::init_timers()
  * 
  * 当接收到新的速度命令时：
  * 1. 应用偏移量和限制最大值
- * 2. 将速度映射到DJI底盘的有效范围
+ * 2. 将速度映射到AGV底盘的有效范围
  * 3. 更新当前命令结构体
  * 4. 可选地输出调试信息
  * 
  * @param msg 接收到的Twist消息指针
  */
-void DJIDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
+void AGVDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
     // 应用偏移量和限制最大值
     double vx = std::clamp(msg->linear.x + vx_offset_, -vx_max_, vx_max_);
     double vy = std::clamp(msg->linear.y + vy_offset_, -vy_max_, vy_max_);
     double wz = std::clamp(msg->angular.z + wz_offset_, -wz_max_, wz_max_);
     
-    // 将标准化速度[-1.0, 1.0]映射到DJI底盘的速度范围
+    // 将标准化速度[-1.0, 1.0]映射到AGV底盘的速度范围
     // 修改为使用用户配置的速度范围
-    auto mapToDJIRange = [this](double value, double max_value) -> int16_t {
+    auto mapToAGVRange = [this](double value, double max_value) -> int16_t {
         // 将值归一化到[-1.0, 1.0]范围
         double normalized = value / max_value;
         normalized = std::clamp(normalized, -1.0, 1.0);
         
-        // 映射到配置的DJI范围
-        return static_cast<int16_t>(DJI_SPEED_MIDDLE + normalized * chassis_speed_range_);
+        // 映射到配置的AGV范围
+        return static_cast<int16_t>(AGV_SPEED_MIDDLE + normalized * chassis_speed_range_);
     };
     
     // 应用映射
-    current_cmd_.linear_x = mapToDJIRange(vx, vx_max_);
-    current_cmd_.linear_y = mapToDJIRange(vy, vy_max_);  // 反转y方向
-    current_cmd_.angular_z = mapToDJIRange(-wz, wz_max_);  // 反转wz方向
+    current_cmd_.linear_x = mapToAGVRange(vx, vx_max_);
+    current_cmd_.linear_y = mapToAGVRange(vy, vy_max_);  // 反转y方向
+    current_cmd_.angular_z = mapToAGVRange(-wz, wz_max_);  // 反转wz方向
     
     if (debug_mode_) {
         RCLCPP_INFO(this->get_logger(), 
-            "CMD_VEL: vx=%.2f, vy=%.2f, wz=%.2f -> DJI: %d, %d, %d",
+            "CMD_VEL: vx=%.2f, vy=%.2f, wz=%.2f -> AGV: %d, %d, %d",
             vx, vy, wz, current_cmd_.linear_x, current_cmd_.linear_y, current_cmd_.angular_z);
     }
 }
@@ -230,7 +230,7 @@ void DJIDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr 
  * 
  * 注意：当前已禁用此功能
  */
-// void DJIDriverNode::encoder_read_callback()
+// void AGVDriverNode::encoder_read_callback()
 // {
 //     // 禁用编码器数据读取功能
 //     RCLCPP_INFO_ONCE(this->get_logger(), "Encoder read function is disabled");
@@ -252,7 +252,7 @@ void DJIDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr 
  * 3. 计算当前命令的校验和
  * 4. 发送控制命令
  */
-void DJIDriverNode::control_write_callback()
+void AGVDriverNode::control_write_callback()
 {
     if (!control_connected_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "控制串口未连接，尝试重新连接...");
@@ -311,7 +311,7 @@ void DJIDriverNode::control_write_callback()
  * @param cmd 要发送的速度命令结构体
  * @return bool 是否发送成功
  */
-bool DJIDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
+bool AGVDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
 {
     try {
         // ===== [简化协议] 只发送xyz速度值 =====
@@ -329,7 +329,7 @@ bool DJIDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
     }
 }
 
-} // namespace dji_driver
+} // namespace agv_driver
 
 /**
  * @brief 主函数
@@ -347,7 +347,7 @@ bool DJIDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
 int main(int argc, char * argv[])
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<dji_driver::DJIDriverNode>();
+    auto node = std::make_shared<agv_driver::AGVDriverNode>();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

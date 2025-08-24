@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(dji_driver)
+project(agv_driver)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -21,15 +21,15 @@ include_directories(
 )
 
 # 添加可执行文件
-add_executable(dji_driver_node 
-  src/dji_driver_node.cpp
+add_executable(agv_driver_node 
+  src/agv_driver_node.cpp
 )
-target_include_directories(dji_driver_node PUBLIC
+target_include_directories(agv_driver_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(dji_driver_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(agv_driver_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
-  dji_driver_node
+  agv_driver_node
   "rclcpp"
   "geometry_msgs"
   "serial"
@@ -40,7 +40,7 @@ ament_target_dependencies(
 )
 
 # 安装可执行文件
-install(TARGETS dji_driver_node
+install(TARGETS agv_driver_node
   DESTINATION lib/${PROJECT_NAME})
 
 # 安装配置文件

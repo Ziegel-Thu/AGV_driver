@@ -1,13 +1,13 @@
-# DJI 驱动节点
+# AGV 驱动节点
 
-这个ROS2包提供了一个驱动节点，用于将ROS2标准的cmd_vel话题数据转换为DJI底盘可识别的串口命令，并接收编码器数据计算里程计信息。
+这个ROS2包提供了一个驱动节点，用于将ROS2标准的cmd_vel话题数据转换为AGV底盘可识别的串口命令，并接收编码器数据计算里程计信息。
 
 ## 功能特点
 
-- 订阅cmd_vel话题并转换为DJI协议格式
+- 订阅cmd_vel话题并转换为AGV协议格式
 - 支持麦克纳姆轮运动学模型
 - 两路独立串口通信：一路发送控制命令，一路接收编码器数据
-- 动态映射ROS Twist消息到DJI底盘364-1684范围
+- 动态映射ROS Twist消息到AGV底盘364-1684范围
 - 可选的协议调试功能，带频率控制
 
 ## 安装
@@ -22,9 +22,9 @@ sudo apt-get install ros-$ROS_DISTRO-serial
 
 ```bash
 cd ~/ros2_ws/src/
-git clone https://github.com/your_username/dji_driver.git
+git clone https://github.com/your_username/agv_driver.git
 cd ..
-colcon build --packages-select dji_driver
+colcon build --packages-select agv_driver
 ```
 
 ## 使用方法
@@ -33,13 +33,13 @@ colcon build --packages-select dji_driver
 
 ```bash
 # 使用默认参数
-ros2 launch dji_driver dji_driver.launch.py
+ros2 launch agv_driver agv_driver.launch.py
 
 # 指定串口设备
-ros2 launch dji_driver dji_driver.launch.py control_port:=/dev/ttyUSB0 encoder_port:=/dev/ttyUSB1
+ros2 launch agv_driver agv_driver.launch.py control_port:=/dev/ttyUSB0 encoder_port:=/dev/ttyUSB1
 
 # 启用调试
-ros2 launch dji_driver dji_driver.launch.py debug:=true protocol_debug:=true
+ros2 launch agv_driver agv_driver.launch.py debug:=true protocol_debug:=true
 ```
 
 ### 发送控制命令
@@ -51,7 +51,7 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5, y: 0.0, z: 0.
 
 ## 参数配置
 
-在`config/dji_driver_params.yaml`中可以配置以下参数：
+在`config/agv_driver_params.yaml`中可以配置以下参数：
 
 - 串口参数：设备名、波特率、超时时间
 - 速度参数：偏移量、最大值
@@ -60,7 +60,7 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5, y: 0.0, z: 0.
 
 ## 速度映射
 
-本驱动程序将ROS2标准的速度命令（±max.x m/s, ±max.y m/s, ±max.z rad/s）映射到DJI底盘接受的364-1684范围：
+本驱动程序将ROS2标准的速度命令（±max.x m/s, ±max.y m/s, ±max.z rad/s）映射到AGV底盘接受的364-1684范围：
 
 - 1024: 停止
 - 1684: 正向最大速度
