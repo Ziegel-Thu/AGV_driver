@@ -16,14 +16,11 @@ namespace dji_driver
  * 4. 创建定时器
  */
 DJIDriverNode::DJIDriverNode()
-: Node("dji_driver_node"), control_connected_(false), // encoder_connected_(false),
-  last_tx_print_time_(this->now()) //, last_rx_print_time_(this->now())
+: Node("dji_driver_node"), 
+  last_tx_print_time_(this->now()),
+  control_connected_(false)
 {
-    // 初始化控制命令结构体
-    current_cmd_.sof = 0xA5;
-    current_cmd_.data_length = 6;
-    current_cmd_.seq = 0;
-    current_cmd_.cmd_id = ROS_VEL_CMD_ID;
+    // 初始化速度值（简化版本，不需要协议字段）
     current_cmd_.linear_x = 1024;  // 停止值
     current_cmd_.linear_y = 1024;  // 停止值
     current_cmd_.angular_z = 1024; // 停止值
@@ -42,7 +39,7 @@ DJIDriverNode::DJIDriverNode()
     init_timers();
     
     RCLCPP_INFO(this->get_logger(), "DJIDriverNode has been initialized");
-    RCLCPP_INFO(this->get_logger(), "注意: 当前模式为仅发送控制命令，编码器数据接收功能已禁用");
+    RCLCPP_INFO(this->get_logger(), "简化模式: 仅发送xyz速度值，无协议头和校验");
 }
 
 /**
@@ -70,7 +67,7 @@ void DJIDriverNode::init_parameters()
     this->declare_parameter("velocity.angular.z.max", 1.0);
     
     // 读取DJI底盘参数
-    this->declare_parameter("dji_chassis.speed_range", 20);
+    this->declare_parameter("dji_chassis.speed_range", 660);
     
     // 读取其他参数
     this->declare_parameter("debug", false);
@@ -269,13 +266,11 @@ void DJIDriverNode::control_write_callback()
         }
     }
     
-    // 递增序列号
-    current_cmd_.seq = (current_cmd_.seq + 1) & 0xFF;
+    // 简化版本：不需要序列号和校验和
+    // current_cmd_.seq = (current_cmd_.seq + 1) & 0xFF;
+    // fill_checksums(current_cmd_);
     
-    // 计算并填充校验和
-    fill_checksums(current_cmd_);
-    
-    // 打印协议数据（如果启用且满足时间间隔要求）
+    // 打印简化的速度数据（如果启用且满足时间间隔要求）
     if (protocol_debug_) {
         rclcpp::Time now = this->now();
         double elapsed = (now - last_tx_print_time_).seconds();
@@ -283,11 +278,13 @@ void DJIDriverNode::control_write_callback()
         if (elapsed >= debug_print_interval_) {
             const uint8_t* data = reinterpret_cast<const uint8_t*>(&current_cmd_);
             std::stringstream ss;
-            ss << "TX Control: ";
-            for (size_t i = 0; i < sizeof(ControlCommand); ++i) {
+            ss << "TX Speed: ";
+            for (size_t i = 0; i < sizeof(SimpleSpeedCommand); ++i) {
                 ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') 
                    << static_cast<int>(data[i]) << " ";
             }
+            ss << " (x=" << current_cmd_.linear_x << " y=" << current_cmd_.linear_y 
+               << " z=" << current_cmd_.angular_z << ")";
             RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
             last_tx_print_time_ = now;
         }
@@ -306,22 +303,24 @@ void DJIDriverNode::control_write_callback()
 /**
  * @brief 向串口发送控制数据
  * 
- * 将控制命令结构体写入串口：
- * 1. 尝试写入数据
+ * 只发送xyz三个速度值，不包含协议头和校验：
+ * 1. 直接发送三个int16_t速度值
  * 2. 验证是否写入成功
  * 3. 处理可能的异常
  * 
- * @param cmd 要发送的控制命令结构体
+ * @param cmd 要发送的速度命令结构体
  * @return bool 是否发送成功
  */
-bool DJIDriverNode::write_control_data(const ControlCommand& cmd)
+bool DJIDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
 {
     try {
-        // ===== [协议相关] 发送控制命令 =====
+        // ===== [简化协议] 只发送xyz速度值 =====
+        // 直接发送三个速度值
         size_t bytes_written = control_serial_.write(
             reinterpret_cast<const uint8_t*>(&cmd),
-            sizeof(ControlCommand));
-        return bytes_written == sizeof(ControlCommand);
+            sizeof(SimpleSpeedCommand));  // 3个int16_t = 6字节
+        
+        return bytes_written == sizeof(SimpleSpeedCommand);
         // ===================================
     } catch (const serial::IOException& e) {
         RCLCPP_ERROR(this->get_logger(), "Control serial write error: %s", e.what());

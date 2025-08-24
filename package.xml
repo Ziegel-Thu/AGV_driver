@@ -3,8 +3,8 @@
 <package format="3">
   <name>dji_driver</name>
   <version>0.0.1</version>
-  <description>DJI Driver node for converting cmd_vel to serial commands</description>
-  <maintainer email="yinzi@todo.todo">yinzi</maintainer>
+  <description>AGV Driver node for converting cmd_vel to serial commands</description>
+  <maintainer email="zhengshurui0627@gmail.com">Ziegel</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

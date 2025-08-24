@@ -9,18 +9,26 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <cmath>
-#include "dji_driver/dji_protocol.hpp"
 
 namespace dji_driver
 {
+
+// DJI底盘速度范围常量
+constexpr int16_t DJI_SPEED_MIDDLE = 1024; // 中间值（停止）
+
+// 简化的速度数据结构体
+struct SimpleSpeedCommand {
+    int16_t linear_x;    ///< X方向线速度
+    int16_t linear_y;    ///< Y方向线速度  
+    int16_t angular_z;   ///< Z轴角速度
+};
 
 /**
  * @brief DJI麦克纳姆轮底盘驱动节点类
  * 
  * 该节点提供以下功能：
  * 1. 订阅cmd_vel话题，将速度命令转换为底盘控制指令
- * 2. 通过两个独立串口与底盘通信：一个发送控制指令，一个接收编码器数据
- * 3. 根据编码器数据计算里程计信息并发布odom话题
+ * 2. 通过串口与底盘通信，发送简化的速度控制指令
  */
 class DJIDriverNode : public rclcpp::Node
 {
@@ -43,22 +51,22 @@ private:
     /**
      * @brief 初始化串口连接
      * 
-     * 根据配置参数初始化控制串口和编码器串口
-     * @return bool 初始化是否成功，有任一串口失败则返回false
+     * 根据配置参数初始化控制串口
+     * @return bool 初始化是否成功
      */
     bool init_serial();
     
     /**
      * @brief 初始化订阅发布器
      * 
-     * 创建cmd_vel的订阅及odom的发布器
+     * 创建cmd_vel的订阅器
      */
     void init_subscriptions();
     
     /**
      * @brief 初始化定时器
      * 
-     * 创建用于定期读取编码器和发送控制命令的定时器
+     * 创建用于定期发送控制命令的定时器
      */
     void init_timers();
 
@@ -80,11 +88,11 @@ private:
     /**
      * @brief 向串口发送控制数据
      * 
-     * 将控制命令结构体写入串口
-     * @param cmd 要发送的控制命令
+     * 将简化的速度命令写入串口
+     * @param cmd 要发送的速度命令
      * @return bool 发送是否成功
      */
-    bool write_control_data(const ControlCommand& cmd);
+    bool write_control_data(const SimpleSpeedCommand& cmd);
     
     // 控制串口参数
     std::string control_port_;          ///< 控制串口设备名
@@ -114,7 +122,9 @@ private:
     // 串口相关
     serial::Serial control_serial_;     ///< 用于发送控制命令的串口对象
     bool control_connected_;            ///< 控制串口连接状态标志
-    ControlCommand current_cmd_;        ///< 当前的控制命令
+    
+    // 当前速度命令
+    SimpleSpeedCommand current_cmd_;    ///< 当前的速度命令
 };
 
 } // namespace dji_driver
