@@ -316,6 +316,9 @@ bool AGVDriverNode::write_control_data(const SimpleSpeedCommand& cmd)
     try {
         // ===== [简化协议] 只发送xyz速度值 =====
         // 直接发送三个速度值
+        uint8_t start_byte = 0xFF; // 可选的起始字节
+        RCLCPP_INFO(this->get_logger(), "Using simplified protocol: sending only xyz speed values");
+        control_serial_.write(reinterpret_cast<const uint8_t*>(&start_byte), 1); // 发送一个字节的0xFF作为起始标志（可选）
         size_t bytes_written = control_serial_.write(
             reinterpret_cast<const uint8_t*>(&cmd),
             sizeof(SimpleSpeedCommand));  // 3个int16_t = 6字节
