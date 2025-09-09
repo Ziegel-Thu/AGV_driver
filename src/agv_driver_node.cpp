@@ -18,7 +18,8 @@ namespace agv_driver
 AGVDriverNode::AGVDriverNode()
 : Node("agv_driver_node"), 
   last_tx_print_time_(this->now()),
-  control_connected_(false)
+  control_connected_(false),
+  last_cmd_time_(this->now())
 {
     // 初始化速度值（简化版本，不需要协议字段）
     current_cmd_.linear_x = 1024;  // 停止值
@@ -73,6 +74,7 @@ void AGVDriverNode::init_parameters()
     this->declare_parameter("debug", false);
     this->declare_parameter("protocol_debug", false);
     this->declare_parameter("debug_print_interval", 2.0);
+    this->declare_parameter("cmd_timeout", 0.5);  // cmd_vel超时时间，默认0.5秒
     
     // 获取控制串口参数值
     control_port_ = this->get_parameter("control_serial.port").as_string();
@@ -93,6 +95,7 @@ void AGVDriverNode::init_parameters()
     debug_mode_ = this->get_parameter("debug").as_bool();
     protocol_debug_ = this->get_parameter("protocol_debug").as_bool();
     debug_print_interval_ = this->get_parameter("debug_print_interval").as_double();
+    cmd_timeout_ = this->get_parameter("cmd_timeout").as_double();
 }
 
 /**
@@ -192,6 +195,9 @@ void AGVDriverNode::init_timers()
  */
 void AGVDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
+    // 更新最后接收命令的时间
+    last_cmd_time_ = this->now();
+    
     // 应用偏移量和限制最大值
     double vx = std::clamp(msg->linear.x + vx_offset_, -vx_max_, vx_max_);
     double vy = std::clamp(msg->linear.y + vy_offset_, -vy_max_, vy_max_);
@@ -254,6 +260,22 @@ void AGVDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr 
  */
 void AGVDriverNode::control_write_callback()
 {
+    // 检查cmd_vel超时，如果超时则将速度归零
+    rclcpp::Time now = this->now();
+    double time_since_last_cmd = (now - last_cmd_time_).seconds();
+    
+    if (time_since_last_cmd > cmd_timeout_) {
+        // 超时，将速度命令归零
+        current_cmd_.linear_x = AGV_SPEED_MIDDLE;   // 停止值
+        current_cmd_.linear_y = AGV_SPEED_MIDDLE;   // 停止值
+        current_cmd_.angular_z = AGV_SPEED_MIDDLE;  // 停止值
+        
+        if (debug_mode_) {
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, 
+                "CMD_VEL超时(%.2f秒)，速度已归零", time_since_last_cmd);
+        }
+    }
+    
     if (!control_connected_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "控制串口未连接，尝试重新连接...");
         try {

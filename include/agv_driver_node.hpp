@@ -125,6 +125,10 @@ private:
     
     // 当前速度命令
     SimpleSpeedCommand current_cmd_;    ///< 当前的速度命令
+    
+    // 超时安全机制
+    rclcpp::Time last_cmd_time_;        ///< 最后接收cmd_vel的时间
+    double cmd_timeout_;                ///< cmd_vel超时时间(秒)，超过此时间未收到命令则归零
 };
 
 } // namespace agv_driver

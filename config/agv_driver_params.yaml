@@ -25,9 +25,12 @@
     
     # AGV底盘参数
     agv_chassis:
-      speed_range: 660       # AGV底盘速度范围，值越大响应越灵敏 (默认为5，对应速度范围±100)
+      speed_range: 330       # AGV底盘速度范围，值越大响应越灵敏 (默认为5，对应速度范围±100)
 
     # 调试模式
     debug: true               # 调试模式开关，启用以查看更多信息
     protocol_debug: false      # 协议调试模式，打印16进制数据
-    debug_print_interval: 0.5  # 调试信息打印间隔(秒)，降低间隔以更频繁地查看数据 
+    debug_print_interval: 0.5  # 调试信息打印间隔(秒)，降低间隔以更频繁地查看数据
+    
+    # 安全机制
+    cmd_timeout: 0.5          # cmd_vel超时时间(秒)，超过此时间未收到命令则速度归零 
